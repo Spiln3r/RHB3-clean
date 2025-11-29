@@ -1,6 +1,5 @@
-﻿name: Build and Release
+﻿name: Build Windows and Create Release
 
-# Permissões necessárias para criar tags / push via GITHUB_TOKEN
 permissions:
   contents: write
 
@@ -8,26 +7,23 @@ on:
   push:
     branches:
       - main
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
       push_tags:
-        description: 'Push tag after build (true/false)'
+        description: 'Push tag after build? (true/false)'
         required: false
         default: 'false'
 
 env:
-  # valor padrão; se disparado via workflow_dispatch, pode ser sobrescrito
   PUSH_TAGS: ${{ github.event.inputs.push_tags || 'false' }}
 
 jobs:
   build-windows:
-    name: Build (Windows)
     runs-on: windows-latest
+    name: Build Windows + Release
 
     steps:
-      - name: Checkout repo (full)
+      - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -38,73 +34,71 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Install dependencies (npm)
-        run: npm ci
-        shell: bash
-
       - name: Install Flutter SDK
         uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
+          channel: stable
 
-      - name: Determine TAG (compute tag or fallback)
+      - name: Find Flutter project folder
+        id: find_flutter
+        shell: bash
+        run: |
+          PUBSPEC=$(find . -name pubspec.yaml -print -quit || true)
+          if [ -z "$PUBSPEC" ]; then
+            echo "❌ pubspec.yaml NOT FOUND in repository."
+            exit 1
+          fi
+          DIR=$(dirname "$PUBSPEC")
+          echo "PROJECT_DIR=$DIR" >> $GITHUB_ENV
+          echo "Found Flutter project at: $DIR"
+
+      - name: Determine TAG
         id: determine_tag
         shell: bash
         run: |
-          # tenta obter uma tag que aponte para o HEAD
           TAG=$(git tag --points-at HEAD)
           if [ -z "$TAG" ]; then
             SHORT_SHA=$(git rev-parse --short=7 HEAD)
             TAG="dev-${SHORT_SHA}"
           fi
-          echo "Derived TAG=$TAG"
-          # exporta para passos seguintes
           echo "TAG=$TAG" >> $GITHUB_ENV
+          echo "Using TAG: $TAG"
 
-      - name: Show tag
+      - name: Run flutter pub get
         shell: bash
-        run: |
-          echo "Using tag: $TAG"
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: flutter pub get
+
+      - name: Build Windows Release
+        shell: bash
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: flutter build windows --release
+
+      - name: Package build into ZIP
+        shell: powershell
         env:
+          PROJECT_DIR: ${{ env.PROJECT_DIR }}
           TAG: ${{ env.TAG }}
+        run: |
+          $project = if ($env:PROJECT_DIR -eq ".") { "." } else { $env:PROJECT_DIR }
+          $release = Join-Path $project "build/windows/runner/Release"
+          if (-not (Test-Path $release)) {
+            Write-Error "❌ Release folder not found: $release"
+            exit 1
+          }
+          $zipName = "windows-$($env:TAG).zip"
+          $zipPath = Join-Path $PWD $zipName
 
-      - name: Optionally create and push tag
-        if: ${{ env.PUSH_TAGS == 'true' }}
-        shell: bash
+          if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+
+          Compress-Archive -Path (Join-Path $release '*') -DestinationPath $zipPath
+          echo "ZIP_PATH=$zipPath" >> $GITHUB_ENV
+          Write-Host "✔ ZIP created: $zipPath"
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ env.TAG }}
-        run: |
-          set -e
-          echo "Creating tag if not exists: $TAG"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
-            echo "Tag $TAG already exists -> skipping tag creation"
-          else
-            git tag -a "$TAG" -m "Release $TAG"
-            # push usando token para autenticar (funciona em repositórios públicos e privados)
-            git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "refs/tags/$TAG"
-            echo "Tag $TAG created and pushed"
-          fi
-
-      - name: Run Flutter build (Windows)
-        shell: bash
-        run: |
-          echo "Starting Flutter Windows build (release)..."
-          flutter --version
-          flutter pub get
-          flutter build windows --release
-
-      - name: Upload Windows build artifact
-        if: always()
-        uses: actions/upload-artifact@v4
         with:
-          name: windows-build
-          path: build/windows/runner/Release/**
-
-      - name: Finish
-        if: success()
-        shell: bash
-        run: echo "Workflow finished successfully"
+          tag_name: ${{ env.TAG }}_
