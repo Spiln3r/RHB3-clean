@@ -1,0 +1,19 @@
+directories:
+  output: dist
+  buildResources: build
+appId: com.rhb3.app
+win:
+  icon: icons/icon.ico
+  target: nsis
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: RHB3 Monitor
+productName: RHB3
+artifactName: ${productName}-Setup-${version}.${ext}
+files:
+  - filter:
+      - '**/*'
+      - '!node_modules/*/{CHANGELOG.md,README.md,README,readme.md}'
+electronVersion: 39.2.3

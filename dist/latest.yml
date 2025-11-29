@@ -1,0 +1,8 @@
+version: 1.0.0
+files:
+  - url: RHB3-Setup-1.0.0.exe
+    sha512: 3c/jQAz1F0vFFmfkSOMskDAgwjKh/ImBXSym+/LFePvqMZza3wTHjf57jluNA5OWyAh+m6FGang37VnapChlSA==
+    size: 97888821
+path: RHB3-Setup-1.0.0.exe
+sha512: 3c/jQAz1F0vFFmfkSOMskDAgwjKh/ImBXSym+/LFePvqMZza3wTHjf57jluNA5OWyAh+m6FGang37VnapChlSA==
+releaseDate: '2025-11-27T04:32:24.706Z'

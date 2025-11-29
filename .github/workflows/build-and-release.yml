@@ -1,0 +1,110 @@
+﻿name: Build and Release
+
+# Permissões necessárias para criar tags / push via GITHUB_TOKEN
+permissions:
+  contents: write
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      push_tags:
+        description: 'Push tag after build (true/false)'
+        required: false
+        default: 'false'
+
+env:
+  # valor padrão; se disparado via workflow_dispatch, pode ser sobrescrito
+  PUSH_TAGS: ${{ github.event.inputs.push_tags || 'false' }}
+
+jobs:
+  build-windows:
+    name: Build (Windows)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repo (full)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies (npm)
+        run: npm ci
+        shell: bash
+
+      - name: Install Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Determine TAG (compute tag or fallback)
+        id: determine_tag
+        shell: bash
+        run: |
+          # tenta obter uma tag que aponte para o HEAD
+          TAG=$(git tag --points-at HEAD)
+          if [ -z "$TAG" ]; then
+            SHORT_SHA=$(git rev-parse --short=7 HEAD)
+            TAG="dev-${SHORT_SHA}"
+          fi
+          echo "Derived TAG=$TAG"
+          # exporta para passos seguintes
+          echo "TAG=$TAG" >> $GITHUB_ENV
+
+      - name: Show tag
+        shell: bash
+        run: |
+          echo "Using tag: $TAG"
+        env:
+          TAG: ${{ env.TAG }}
+
+      - name: Optionally create and push tag
+        if: ${{ env.PUSH_TAGS == 'true' }}
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ env.TAG }}
+        run: |
+          set -e
+          echo "Creating tag if not exists: $TAG"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "Tag $TAG already exists -> skipping tag creation"
+          else
+            git tag -a "$TAG" -m "Release $TAG"
+            # push usando token para autenticar (funciona em repositórios públicos e privados)
+            git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "refs/tags/$TAG"
+            echo "Tag $TAG created and pushed"
+          fi
+
+      - name: Run Flutter build (Windows)
+        shell: bash
+        run: |
+          echo "Starting Flutter Windows build (release)..."
+          flutter --version
+          flutter pub get
+          flutter build windows --release
+
+      - name: Upload Windows build artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: build/windows/runner/Release/**
+
+      - name: Finish
+        if: success()
+        shell: bash
+        run: echo "Workflow finished successfully"

@@ -1,0 +1,87 @@
+[
+  {
+    "ticker": "PETR4",
+    "name": "Petrobras PN",
+    "type": "Ações"
+  },
+  {
+    "ticker": "VALE3",
+    "name": "Vale ON",
+    "type": "Ações"
+  },
+  {
+    "ticker": "JBSS3",
+    "name": "JBS ON",
+    "type": "Ações"
+  },
+  {
+    "ticker": "ITUB4",
+    "name": "Itaú Unibanco PN",
+    "type": "Ações"
+  },
+  {
+    "ticker": "BBDC4",
+    "name": "Bradesco PN",
+    "type": "Ações"
+  },
+  {
+    "ticker": "ABEV3",
+    "name": "Ambev ON",
+    "type": "Ações"
+  },
+  {
+    "ticker": "MXRF11",
+    "name": "Mérito Renda FII",
+    "type": "FIIs"
+  },
+  {
+    "ticker": "HGLG11",
+    "name": "CSHG Logística FII",
+    "type": "FIIs"
+  },
+  {
+    "ticker": "BOVA11",
+    "name": "iShares Ibovespa ETF",
+    "type": "ETFs"
+  },
+  {
+    "ticker": "IVVB11",
+    "name": "iShares S&P500 ETF",
+    "type": "ETFs"
+  },
+  {
+    "ticker": "BTCUSD",
+    "name": "Bitcoin (USD)",
+    "type": "Cripto"
+  },
+  {
+    "ticker": "ETHUSD",
+    "name": "Ethereum (USD)",
+    "type": "Cripto"
+  },
+  {
+    "ticker": "BBAS3",
+    "name": "Banco do Brasil ON",
+    "type": "Ações"
+  },
+  {
+    "ticker": "PETR3",
+    "name": "Petrobras ON",
+    "type": "Ações"
+  },
+  {
+    "ticker": "KNRI11",
+    "name": "Kinea Renda Imobiliária",
+    "type": "FIIs"
+  },
+  {
+    "ticker": "B3SA3",
+    "name": "B3 ON",
+    "type": "Ações"
+  },
+  {
+    "ticker": "COGN3",
+    "name": "Cogna ON",
+    "type": "BDRs"
+  }
+]
