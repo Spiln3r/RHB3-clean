@@ -15,6 +15,7 @@ on:
         default: 'false'
 
 env:
+  # Default; pode ser sobrescrito por workflow_dispatch
   PUSH_TAGS: ${{ github.event.inputs.push_tags || 'false' }}
 
 jobs:
@@ -49,6 +50,10 @@ jobs:
             exit 1
           fi
           DIR=$(dirname "$PUBSPEC")
+          # normalize '.' to literal dot
+          if [ "$DIR" = "." ]; then
+            DIR="."
+          fi
           echo "PROJECT_DIR=$DIR" >> $GITHUB_ENV
           echo "Found Flutter project at: $DIR"
 
@@ -64,36 +69,56 @@ jobs:
           echo "TAG=$TAG" >> $GITHUB_ENV
           echo "Using TAG: $TAG"
 
+      - name: Show tag and project dir (debug)
+        shell: bash
+        run: |
+          echo "PROJECT_DIR='${PROJECT_DIR}'"
+          echo "TAG='${TAG}'"
+        env:
+          PROJECT_DIR: ${{ env.PROJECT_DIR }}
+          TAG: ${{ env.TAG }}
+
       - name: Run flutter pub get
         shell: bash
         working-directory: ${{ env.PROJECT_DIR }}
-        run: flutter pub get
+        run: |
+          flutter pub get
 
-      - name: Build Windows Release
+      - name: Build Windows (release)
         shell: bash
         working-directory: ${{ env.PROJECT_DIR }}
-        run: flutter build windows --release
+        run: |
+          flutter build windows --release
 
       - name: Package build into ZIP
         shell: powershell
         env:
           PROJECT_DIR: ${{ env.PROJECT_DIR }}
           TAG: ${{ env.TAG }}
+          GITHUB_ENV: ${{ env.GITHUB_ENV }}
         run: |
+          # determine project dir (PowerShell)
           $project = if ($env:PROJECT_DIR -eq ".") { "." } else { $env:PROJECT_DIR }
-          $release = Join-Path $project "build/windows/runner/Release"
+          $release = Join-Path $project "build\windows\runner\Release"
+
           if (-not (Test-Path $release)) {
             Write-Error "❌ Release folder not found: $release"
             exit 1
           }
+
           $zipName = "windows-$($env:TAG).zip"
           $zipPath = Join-Path $PWD $zipName
 
           if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 
-          Compress-Archive -Path (Join-Path $release '*') -DestinationPath $zipPath
-          echo "ZIP_PATH=$zipPath" >> $GITHUB_ENV
-          Write-Host "✔ ZIP created: $zipPath"
+          # Compress-Archive accepts path with wildcard as string
+          Compress-Archive -Path ("{0}\*" -f $release) -DestinationPath $zipPath -Force
+
+          # safe, robust message
+          Write-Host ("✔ ZIP created at: {0}" -f $zipPath)
+
+          # export ZIP_PATH for subsequent steps (PowerShell way)
+          "ZIP_PATH=$zipPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Create GitHub Release
         id: create_release
@@ -101,4 +126,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ env.TAG }}_
+          tag_name: ${{ env.TAG }}
+          release_name: ${{ env.TAG }}
+          body: "Automated release for ${{ env.TAG }}"
+          draft: false
+          prerelease: false
+
+      - name: Upload ZIP to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ env.ZIP_PATH }}
+          asset_name: windows-${{ env.TAG }}.zip
+          asset_content_type: application/zip
