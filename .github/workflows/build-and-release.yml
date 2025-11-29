@@ -19,11 +19,11 @@ env:
 
 jobs:
   build-windows:
-    runs-on: windows-latest
     name: Build Windows + Release
+    runs-on: windows-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -94,9 +94,23 @@ jobs:
           PROJECT_DIR: ${{ env.PROJECT_DIR }}
           TAG: ${{ env.TAG }}
         run: |
-          # determina diretório do projeto com segurança
-          if ($env:PROJECT_DIR -eq ".") { $project = "." } else { $project = $env:PROJECT_DIR }
-          $release = Join-Path $project "build\windows\runner\Release"
+          # determina diretório do projeto (PowerShell)
+          if ($env:PROJECT_DIR -eq ".") {
+            $project = "."
+          } else {
+            $project = $env:PROJECT_DIR
+          }
+
+          # caminho usado pelos runners windows (x64)
+          $release = Join-Path $project "build\windows\x64\runner\Release"
+
+          # fallback: alguns projetos podem usar build\windows\runner\Release (sem x64)
+          if (-not (Test-Path $release)) {
+            $alt = Join-Path $project "build\windows\runner\Release"
+            if (Test-Path $alt) {
+              $release = $alt
+            }
+          }
 
           if (-not (Test-Path $release)) {
             Write-Error "❌ Release folder not found: $release"
@@ -111,12 +125,12 @@ jobs:
           # cria o zip (wildcard protegido)
           Compress-Archive -Path ("$release\*") -DestinationPath $zipPath -Force
 
-          # imprime caminho sem usar formatação que quebra o YAML
-          Write-Host "ZIP file created successfully:"
+          # imprime caminho do zip (seguro)
+          Write-Host "ZIP file created successfully at:"
           Write-Host $zipPath
 
           # exporta ZIP_PATH para os próximos passos
-          Add-Content -Path $env:GITHUB_ENV -Value ("ZIP_PATH=$zipPath")
+          Add-Content -Path $env:GITHUB_ENV -Value "ZIP_PATH=$zipPath"
 
       - name: Create GitHub Release
         id: create_release
